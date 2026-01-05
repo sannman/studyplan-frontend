@@ -13,6 +13,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiService } from "@/services/api";
 import type { Priority } from "@/types/task";
 import { useToast } from "@/components/ui/use-toast";
+import { addDays } from "date-fns";
+
+const DEFAULT_DAYS_AHEAD = 7;
 
 export function TaskForm({ onTaskCreated }: { onTaskCreated: () => void }) {
   const [taskName, setTaskName] = useState("");
@@ -27,11 +30,13 @@ export function TaskForm({ onTaskCreated }: { onTaskCreated: () => void }) {
     setLoading(true);
 
     try {
+      const defaultDueDate = addDays(new Date(), DEFAULT_DAYS_AHEAD).toISOString();
+      
       await apiService.createTask({
         task_name: taskName,
         scale_difficulty: parseInt(difficulty),
         priority,
-        timedue: dueDate ? new Date(dueDate).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        timedue: dueDate ? new Date(dueDate).toISOString() : defaultDueDate,
       });
 
       toast({
