@@ -4,10 +4,56 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiService } from "@/services/api";
-import type { StudyPlan, StudyPlanSession } from "@/types/task";
+import type { StudyPlan, StudyPlanSession, Priority } from "@/types/task";
 import { useToast } from "@/components/ui/use-toast";
 import { addDays, format, startOfToday } from "date-fns";
 import { Calendar, CalendarDays, Clock } from "lucide-react";
+
+const normalizeStudyPlan = (rawPlan: any): StudyPlan => {
+  const fallbackDuration = Number(rawPlan?.study_session_duration ?? rawPlan?.session_duration ?? 1);
+
+  const schedule: StudyPlanSession[] = Array.isArray(rawPlan?.schedule)
+    ? rawPlan.schedule.flatMap((item: any) => {
+        const sessions = Array.isArray(item?.sessions) && item.sessions.length > 0 ? item.sessions : [item];
+
+        return sessions.map((session: any) => {
+          const duration = Number(session?.duration ?? session?.duration_hours ?? fallbackDuration);
+          const startTime = session?.start_time ?? session?.date ?? "";
+          const startDate = startTime ? new Date(startTime) : null;
+          const endTime =
+            session?.end_time ??
+            (startDate && duration
+              ? new Date(startDate.getTime() + duration * 60 * 60 * 1000).toISOString()
+              : "");
+
+          return {
+            task_name: session?.task_name ?? item?.task_name ?? "Task",
+            priority_score: Number(session?.priority_score ?? item?.priority_score ?? 0),
+            difficulty: Number(session?.difficulty ?? item?.difficulty ?? 1),
+            priority: (session?.priority ?? item?.priority_status ?? item?.priority ?? "Pending") as Priority,
+            timedue: session?.timedue ?? item?.due_date ?? item?.timedue ?? "",
+            start_time: startTime,
+            end_time: endTime,
+            duration,
+            note: session?.note ?? item?.note,
+          };
+        });
+      })
+    : [];
+
+  const totalStudyHours =
+    rawPlan?.total_study_hours ??
+    schedule.reduce((total, session) => total + Number(session.duration ?? 0), 0);
+
+  return {
+    schedule,
+    total_tasks: Number(rawPlan?.total_tasks ?? rawPlan?.total_active_tasks ?? schedule.length),
+    total_study_hours: Number(totalStudyHours),
+    available_hours_per_day: Number(rawPlan?.available_hours_per_day ?? 0),
+    study_session_duration: Number(rawPlan?.study_session_duration ?? rawPlan?.session_duration ?? fallbackDuration),
+    adjustment_reason: rawPlan?.adjustment_reason,
+  };
+};
 
 export function StudyPlanGenerator() {
   const [availableHours, setAvailableHours] = useState("4");
@@ -68,10 +114,11 @@ export function StudyPlanGenerator() {
         parseFloat(availableHours),
         parseFloat(sessionDuration)
       );
-      setPlan(generatedPlan);
+      const normalizedPlan = normalizeStudyPlan(generatedPlan);
+      setPlan(normalizedPlan);
       toast({
         title: "Study plan generated",
-        description: `Created a plan with ${generatedPlan.schedule.length} study sessions`,
+        description: `Created a plan with ${normalizedPlan.schedule.length} study sessions`,
       });
     } catch (error) {
       toast({
